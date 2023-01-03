@@ -5,7 +5,7 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
-members = ["rules", "types"]
+members = ["sudoku-core", "sudoku-macros"]
 
 [[bin]]
 name = "main"
@@ -14,7 +14,7 @@ path = "main.rs"
 [dev-dependencies]
 
 [dependencies]
-sudoku-rules = { path = "rules" }
-sudoku-types = { path = "types" }
+# sudoku-core = { path = "sudoku-core" }
+# sudoku-macros = { path = "sudoku-macros" }
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }

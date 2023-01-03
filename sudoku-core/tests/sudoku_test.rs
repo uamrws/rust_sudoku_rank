@@ -1,4 +1,6 @@
-use sudoku_types::Sudoku;
+use std::pin::Pin;
+
+use sudoku_core::Sudoku;
 
 #[test]
 fn deserialize() {
@@ -14,6 +16,6 @@ fn deserialize() {
         [0, 4, 0, 0, 3, 0, 0, 1, 0]
     ]"#;
     // println!("{:?}", serde_json::to_string(&a).unwrap());
-    let b: Sudoku = serde_json::from_str(a).unwrap();
+    let b: Pin<Box<Sudoku>> = serde_json::from_str(a).unwrap();
     println!("{}", serde_json::to_string(&b).unwrap());
 }

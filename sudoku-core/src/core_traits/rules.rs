@@ -1,5 +1,3 @@
-use sudoku_types::Sudoku;
-
 /*
 1. 将每一行的结果确定
    a. 当前格为空白处的，值等于「1-9」的集合减去「当前行所有确定的数的集合」
@@ -120,62 +118,4 @@ pub trait SudokuRule {
     /// 试探法(Trial-And-Error):
     /// 若某个空格的候选数只有 2 个时，进行试探填写其中一个候选数，若填写成功则该试探成功，若导致矛盾则另外一个候选数应填该空格。
     fn trial_and_error(&mut self);
-}
-
-impl SudokuRule for Sudoku {
-    fn naked_single(&mut self) {
-        todo!()
-    }
-
-    fn naked_pair(&mut self) {
-        todo!()
-    }
-
-    fn naked_triplet(&mut self) {
-        todo!()
-    }
-
-    fn naked_quad(&mut self) {
-        todo!()
-    }
-
-    fn hidden_single(&mut self) {
-        todo!()
-    }
-
-    fn hidden_pair(&mut self) {
-        todo!()
-    }
-
-    fn hidden_triplet(&mut self) {
-        todo!()
-    }
-
-    fn hidden_quad(&mut self) {
-        todo!()
-    }
-
-    fn intersection_removel(&mut self) {
-        todo!()
-    }
-
-    fn x_wing(&mut self) {
-        todo!()
-    }
-
-    fn xy_wing(&mut self) {
-        todo!()
-    }
-
-    fn xyz_wing(&mut self) {
-        todo!()
-    }
-
-    fn swordfish(&mut self) {
-        todo!()
-    }
-
-    fn trial_and_error(&mut self) {
-        todo!()
-    }
 }
