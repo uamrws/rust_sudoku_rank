@@ -1,136 +1,203 @@
-use std::ops::{Index, IndexMut};
+use std::{collections::HashMap, rc::Rc};
 
-trait Cell {
-    fn bits(&self) -> u16;
-}
-#[derive(Debug, Clone, Copy)]
-pub struct Row([*mut u16; 9]);
-#[derive(Debug, Clone, Copy)]
-pub struct Col([*mut u16; 9]);
-#[derive(Debug, Clone, Copy)]
-pub struct Block([*mut u16; 9]);
+use phf::phf_map;
 
-impl TryFrom<Vec<*mut u16>> for Row {
-    type Error = Vec<*mut u16>;
+static KNOWN_MAP: phf::Map<u16, u16> = phf_map! {
+    0b1_0_0000_0001_u16 => 1,
+    0b1_0_0000_0010_u16 => 2,
+    0b1_0_0000_0100_u16 => 3,
+    0b1_0_0000_1000_u16 => 4,
+    0b1_0_0001_0000_u16 => 5,
+    0b1_0_0010_0000_u16 => 6,
+    0b1_0_0100_0000_u16 => 7,
+    0b1_0_1000_0000_u16 => 8,
+    0b1_1_0000_0000_u16 => 9,
+};
 
-    fn try_from(value: Vec<*mut u16>) -> Result<Self, Self::Error> {
-        Ok(Self(value.try_into()?))
-    }
-}
-impl TryFrom<Vec<*mut u16>> for Col {
-    type Error = Vec<*mut u16>;
-
-    fn try_from(value: Vec<*mut u16>) -> Result<Self, Self::Error> {
-        Ok(Self(value.try_into()?))
-    }
-}
-impl TryFrom<Vec<*mut u16>> for Block {
-    type Error = Vec<*mut u16>;
-
-    fn try_from(value: Vec<*mut u16>) -> Result<Self, Self::Error> {
-        Ok(Self(value.try_into()?))
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sudoku {
-    rows: [Row; 9],
-    cols: [Col; 9],
-    blocks: [Block; 9],
+    pub data: [u16; 81],
+    pub rows: Vec<Rc<Vec<usize>>>,
+    pub cols: Vec<Rc<Vec<usize>>>,
+    pub blocks: Vec<Rc<Vec<usize>>>,
+}
+enum ScoreRule {
+    NakedSingle = 1,
+    HiddenSingle = 5,
+
+    NakedPair = 10,
+    HiddenPair = 15,
+
+    NakedTriplet = 20,
+    HiddenTriplet = 25,
+
+    NakedQuad = 30,
+    HiddenQuad = 35,
+
+    IntersectionRemovel = 40,
+
+    XWing = 500,
+    Swordfish = 1000,
+    XYWing = 3000,
+    XYZWing = 5000,
+    Trial = 8000,
+}
+pub struct SudokuScore {
+    score_board: HashMap<ScoreRule, u16>,
 }
 
-impl Sudoku {
-    fn rows(&mut self, r: usize) -> [&mut u16; 9] {
-        todo!()
+// 通用工具
+pub trait CommonTool {
+    const MINERAL_FLAG: u16 = 0b10_0000_0000;
+
+    fn is_mineral(stone: u16) -> bool {
+        stone & Self::MINERAL_FLAG != 0
     }
-    fn cols(&mut self, r: usize) -> [&mut u16; 9] {
-        todo!()
+
+    fn refine(mineral: u16) -> u16 {
+        KNOWN_MAP[&mineral]
     }
-    fn blocks(&mut self, r: usize) -> [&mut u16; 9] {
-        todo!()
+
+    fn transform(loc: usize) -> (usize, usize, usize) {
+        (loc / 9, loc % 9, loc / 27 * 3 + loc % 9 / 3)
+    }
+}
+impl<'a> CommonTool for SudokuTracer<'a> {}
+impl CommonTool for NakedBotMiner {}
+impl CommonTool for Sudoku {}
+
+// 显示机器矿工
+pub struct NakedBotMiner {
+    // 矿镐(需要消除数字)
+    mining_pick: u16,
+    // 矿区路径: 对应的行/列/区块
+    route: Vec<Rc<Vec<usize>>>,
+    skip: Vec<usize>,
+    // 挖矿成功的位置记录
+    loc_record: Vec<usize>,
+}
+
+// 智能探矿车
+// sudoku ai tracer
+pub struct SudokuTracer<'a> {
+    pub sudoku: &'a mut Sudoku,
+    pub loc: usize,
+}
+pub struct NakedScanner;
+impl NakedScanner {
+    fn scan(sudoku: &mut Sudoku) {}
+}
+
+impl NakedBotMiner {
+    fn new(mining_pick: u16, route: Vec<Rc<Vec<usize>>>, skip: Vec<usize>) -> NakedBotMiner {
+        NakedBotMiner {
+            // 矿镐(需要消除数字)
+            mining_pick,
+            route,
+            skip,
+            loc_record: Vec::with_capacity(9),
+        }
+    }
+    fn work(&mut self, sudoku: &mut Sudoku) {
+        // 遍历所有的矿区(行/列/区块)
+        self.route.iter().for_each(|x| {
+            // 筛选掉需要跳过的位置
+            (*x).iter()
+                .filter(|&i| !self.skip.contains(i))
+                .for_each(|&i| {
+                    let n = sudoku[i];
+                    // 挖矿成功的记录下位置
+                    if Self::is_mineral(n) && n & self.mining_pick != 0 {
+                        sudoku[i] ^= n & self.mining_pick;
+                        self.loc_record.push(i)
+                    }
+                })
+        })
     }
 }
 
-impl Sudoku {
-    pub fn new(data: &mut [[u16; 9]; 9]) -> Sudoku {
-        let rows: [Row; 9] = data
-            .iter_mut()
-            .map(|x| {
-                x.iter_mut()
-                    .map(|x| x as *mut u16)
-                    .collect::<Vec<*mut u16>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<Row>>()
-            .try_into()
-            .unwrap();
-        let cols: [Col; 9] = (0..9)
-            .map(|c| {
-                (0..9)
-                    .map(|r| rows[r].0[c])
-                    .collect::<Vec<*mut u16>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<Col>>()
-            .try_into()
-            .unwrap();
-        let blocks: [Block; 9] = (0..9)
-            .map(|b| {
-                (0..9)
-                    .map(|i| {
-                        let (r, c) = Self::bi_to_rc(b, i);
-                        rows[r].0[c]
-                    })
-                    .collect::<Vec<*mut u16>>()
-                    .try_into()
-                    .unwrap()
-            })
-            .collect::<Vec<Block>>()
-            .try_into()
-            .unwrap();
-        Sudoku { rows, cols, blocks }
+// 矿脉: 当前的行/列/区块
+// 矿点: 未解答出来的单元格
+
+// 步骤一 进入第一个矿点A位置
+// 步骤二 使用扫描枪(各种规则)扫描矿点的整个矿区
+// 显示规则扫描枪:
+//      步骤1 扫描位置A的所有矿区(行/列/区块)
+//      步骤2 按规则比对，派挖矿机器人挖掘符合条件的矿石，并记录挖矿成功的位置
+//      步骤3 挖掘完毕后，比对记录的位置B和位置A的大小，如果B<A,重复步骤1
+// 其他规则:
+// 步骤三 进入下一个矿点，重复步骤二
+impl<'a> SudokuTracer<'a> {
+    pub fn new(sudoku: &mut Sudoku) -> SudokuTracer {
+        SudokuTracer { sudoku, loc: 0 }
     }
-    // 行列索引转换为块索引
-    pub fn rc_to_bi(r: usize, c: usize) -> (usize, usize) {
-        (r / 3 * 3 + c / 3, r % 3 * 3 + c % 3 * 3)
+
+    pub fn start(&mut self) {
+        while self.loc < self.sudoku.len() {
+            if Self::is_mineral(self.sudoku[self.loc]) {
+                self.work();
+            }
+            self.walk();
+        }
     }
-    // 块索引转换为行列索引
-    pub fn bi_to_rc(b: usize, i: usize) -> (usize, usize) {
-        (b / 3 * 3 + i / 3, b % 3 * 3 + i % 3)
+
+    pub fn work(&mut self) {
+        self.naked_scan(self.loc)
+    }
+
+    pub fn walk(&mut self) {
+        self.loc += 1
+    }
+
+    // 显示规则扫描枪:
+    //      步骤1 扫描位置A的所有矿区(行/列/区块)
+    //      步骤2 按规则比对，派挖矿机器人挖掘符合条件的矿石，并记录挖矿成功的位置
+    //      步骤3 挖掘完毕后，比对记录的位置B和位置A的大小，如果B<A,重复步骤1
+    pub fn naked_scan(&mut self, loc: usize) {
+        let mineral = self.sudoku[loc];
+
+        let mut loc_record = vec![];
+        let (r, c, b) = Self::transform(loc);
+        let row = self.sudoku.rows[r].clone();
+        let col = self.sudoku.cols[c].clone();
+        let block = self.sudoku.blocks[b].clone();
+        match mineral.count_ones() {
+            2 => {
+                self.sudoku[loc] = Self::refine(mineral);
+                let mut naked_bot = NakedBotMiner::new(
+                    mineral ^ Self::MINERAL_FLAG,
+                    vec![row, col, block],
+                    vec![loc],
+                );
+                naked_bot.work(&mut self.sudoku);
+                loc_record.extend(naked_bot.loc_record);
+            }
+            x if x <= 5 => {
+                let mut scan = |v: Rc<Vec<usize>>| {
+                    let mut skip = vec![loc];
+                    for i in &*v {
+                        if *i != loc && mineral == self.sudoku[*i] {
+                            skip.push(*i);
+                        }
+                        if skip.len() == x as usize {
+                            let mut naked_bot =
+                                NakedBotMiner::new(mineral ^ Self::MINERAL_FLAG, vec![v], skip);
+                            naked_bot.work(&mut self.sudoku);
+                            loc_record.extend(naked_bot.loc_record);
+                            break;
+                        }
+                    }
+                };
+                scan(row);
+                scan(col);
+                scan(block);
+            }
+            _ => return,
+        }
+        loc_record.iter().filter(|&i| i != &loc).for_each(|&i| {
+            if Self::is_mineral(self.sudoku[i]) {
+                self.naked_scan(i)
+            }
+        });
     }
 }
-
-// pub struct Block<T> {
-//     pub rows: [[T; 3]; 3],
-//     pub cols: [[T; 3]; 3],
-// }
-
-// pub struct Sudoku {
-//     pub inner: Block<Block<u16>>,
-
-//     // 9 个 数独行 的数组, 记录所有 确定 的数字。
-//     // 用0b000_000_000表示每行, 用位来表示已经确定的数字1-9
-//     pub pos_rows: [u16; 9],
-
-//     // 9 个 数独区块 的数组, 记录所有 确定 的数字。
-//     // 用0b000_000_000表示每个区块, 用位来表示已经确定的数字1-9
-//     pub pos_blocks: [u16; 9],
-
-//     // 9 个 数独列 的数组, 记录所有 确定 的数字。
-//     // 用0b000_000_000表示每列, 用位来表示已经确定的数字1-9
-//     pub pos_columns: [u16; 9],
-
-//     // 9 个 数独行 的数组, 记录所有 还未确定 的数字的下标。
-//     // 用0b000_000_000表示未确定的数字, 用位来表示可能的数字1-9
-//     pub neg_rows: [[*mut u16; 9]; 9],
-
-//     // 9 个 数独区块 的数组, 记录所有 还未确定 的数字的下标。
-//     // 用0b000_000_000表示未确定的数字, 用位来表示可能的数字1-9
-//     pub neg_blocks: [[*mut u16; 9]; 9],
-
-//     // 9 个 数独列 的数组, 记录所有 还未确定 的数字的下标。
-//     // 用0b000_000_000表示未确定的数字, 用位来表示可能的数字1-9
-//     pub neg_columns: [[[*mut u16; 3]; 3]; 9],
-//     pub _maker: PhantomPinned,
-// }

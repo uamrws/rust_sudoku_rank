@@ -1,119 +1,101 @@
-// use std::{marker::PhantomPinned, pin::Pin};
+use std::{
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 
-// use serde::{ser::SerializeTuple, Deserialize, Serialize};
+use super::types::{CommonTool, Sudoku};
 
-// use crate::{core_traits::rules::SudokuRule, Sudoku};
+impl Sudoku {
+    pub fn new(data: [u16; 81]) -> Sudoku {
+        let (rows, (cols, blocks)) = Self::build();
+        let mut sudoku = Sudoku {
+            data: data
+                .iter()
+                .map(|x| if *x == 0 { 0b11_1111_1111 } else { *x })
+                .collect::<Vec<u16>>()
+                .try_into()
+                .unwrap(),
+            rows,
+            cols,
+            blocks,
+        };
+        sudoku.init();
+        sudoku
+    }
 
-// impl SudokuRule for Sudoku {
-//     fn naked_single(&mut self) {
-//         for r in self.neg_rows {
-//             for c in r {}
-//         }
-//     }
+    fn build() -> (
+        Vec<Rc<Vec<usize>>>,
+        (Vec<Rc<Vec<usize>>>, Vec<Rc<Vec<usize>>>),
+    ) {
+        (0..9)
+            .into_iter()
+            .map(|i| {
+                let r = i * 9;
+                let c = i;
+                let b = i / 3 * 27 + i % 3 * 3;
+                let (x, (y, z)) = (0..9)
+                    .into_iter()
+                    .map(|j| (r + j, (c + j * 9, b + j / 3 * 9 + j % 3)))
+                    .unzip();
+                (Rc::new(x), (Rc::new(y), Rc::new(z)))
+            })
+            .unzip()
+    }
 
-//     fn naked_pair(&mut self) {
-//         todo!()
-//     }
+    // 初始化
+    fn init(&mut self) {
+        for i in 0..9 {
+            self.set_candidature(self.rows[i].clone());
+            self.set_candidature(self.cols[i].clone());
+            self.set_candidature(self.blocks[i].clone());
+        }
+    }
 
-//     fn naked_triplet(&mut self) {
-//         todo!()
-//     }
+    // 填入候选数
+    fn set_candidature(&mut self, idxes: Rc<Vec<usize>>) {
+        let filled = self.get_filled(&*idxes);
+        (*idxes).iter().for_each(|&x| {
+            let n = self[x];
+            if Self::is_mineral(n) && n & filled != 0 {
+                self[x] ^= n & filled;
+            }
+        })
+    }
 
-//     fn naked_quad(&mut self) {
-//         todo!()
-//     }
+    // 获取该行/列/区块所有已经确定的数，以二进制表示
+    fn get_filled(&self, idxes: &Vec<usize>) -> u16 {
+        idxes.iter().fold(0, |acc, &x| {
+            let n = self[x];
+            if Self::is_mineral(n) {
+                acc
+            } else {
+                acc | (1 << n >> 1)
+            }
+        })
+    }
+}
 
-//     fn hidden_single(&mut self) {
-//         todo!()
-//     }
+impl Default for Sudoku {
+    fn default() -> Self {
+        Self {
+            data: [0; 81],
+            rows: Vec::with_capacity(9),
+            cols: Vec::with_capacity(9),
+            blocks: Vec::with_capacity(9),
+        }
+    }
+}
 
-//     fn hidden_pair(&mut self) {
-//         todo!()
-//     }
+impl Deref for Sudoku {
+    type Target = [u16; 81];
 
-//     fn hidden_triplet(&mut self) {
-//         todo!()
-//     }
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
 
-//     fn hidden_quad(&mut self) {
-//         todo!()
-//     }
-
-//     fn intersection_removel(&mut self) {
-//         todo!()
-//     }
-
-//     fn x_wing(&mut self) {
-//         todo!()
-//     }
-
-//     fn xy_wing(&mut self) {
-//         todo!()
-//     }
-
-//     fn xyz_wing(&mut self) {
-//         todo!()
-//     }
-
-//     fn swordfish(&mut self) {
-//         todo!()
-//     }
-
-//     fn trial_and_error(&mut self) {
-//         todo!()
-//     }
-// }
-
-// impl Serialize for Pin<Box<Sudoku>> {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         let mut s = serializer.serialize_tuple(9)?;
-//         for i in &self.inner {
-//             s.serialize_element(i)?;
-//         }
-//         s.end()
-//     }
-// }
-
-// impl<'de> Deserialize<'de> for Pin<Box<Sudoku>> {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         Ok(Sudoku::new(<[[u16; 9]; 9] as Deserialize>::deserialize(
-//             deserializer,
-//         )?))
-//     }
-// }
-
-// // impl<'de> Deserialize<'de> for Sudoku {
-// //     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-// //     where
-// //         D: serde::Deserializer<'de>,
-// //     {
-// //         deserializer.deserialize_tuple(9, SudokuVisitor)
-// //     }
-// // }
-// // struct SudokuVisitor;
-
-// // impl<'de> Visitor<'de> for SudokuVisitor {
-// //     type Value = Sudoku;
-
-// //     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-// //         formatter.write_str("tuple must be like [[u16; 9]; 9]")
-// //     }
-// //     fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-// //     where
-// //         A: de::SeqAccess<'de>,
-// //     {
-// //         let mut i = 0;
-// //         let mut inner: [[u16; 9]; 9] = [[0; 9]; 9];
-// //         while let Ok(Some(v)) = seq.next_element() {
-// //             inner[i] = v;
-// //             i += 1;
-// //         }
-// //         Ok(Self::Value::new(inner))
-// //     }
-// // }
+impl DerefMut for Sudoku {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
+}

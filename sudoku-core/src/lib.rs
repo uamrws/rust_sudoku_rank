@@ -1,4 +1,4 @@
 mod core_traits;
-mod core_types;
+pub mod core_types;
 
-pub use core_types::Sudoku;
+pub use core_types::types::{Sudoku, SudokuTracer};
